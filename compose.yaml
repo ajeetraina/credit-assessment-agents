@@ -1,0 +1,127 @@
+# Rural Credit Assessment Multi-Agent System
+# Following Docker Compose for Agents Architecture
+
+services:
+  # MCP Gateway - Central tool management
+  mcp-gateway:
+    image: docker.io/docker/mcp-gateway:latest
+    container_name: credit-mcp-gateway
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./mcp.env:/app/.env
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MCP_GATEWAY_PORT=3001
+      - MCP_GATEWAY_LOG_LEVEL=info
+    depends_on:
+      - customer-assessment-mcp
+      - risk-analyzer-mcp
+      - credit-scorer-mcp
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Customer Assessment MCP Server
+  customer-assessment-mcp:
+    build: ./mcp-servers/customer-assessment
+    container_name: credit-customer-mcp
+    environment:
+      - MCP_SERVER_NAME=customer-assessment
+      - DATABASE_URL=postgresql://credit_user:credit_pass@postgres:5432/credit_db
+    depends_on:
+      - postgres
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Risk Analysis MCP Server
+  risk-analyzer-mcp:
+    build: ./mcp-servers/risk-analyzer
+    container_name: credit-risk-mcp
+    environment:
+      - MCP_SERVER_NAME=risk-analyzer
+      - MODEL_RUNNER_URL=http://host.docker.internal:11434
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Credit Scoring MCP Server
+  credit-scorer-mcp:
+    build: ./mcp-servers/credit-scorer
+    container_name: credit-scorer-mcp
+    environment:
+      - MCP_SERVER_NAME=credit-scorer
+      - DATABASE_URL=postgresql://credit_user:credit_pass@postgres:5432/credit_db
+    depends_on:
+      - postgres
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Main Agent using LangGraph
+  credit-agent:
+    build: ./agents/orchestrator
+    container_name: credit-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_GATEWAY_URL=http://mcp-gateway:3001
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AGENT_MODE=production
+    depends_on:
+      - mcp-gateway
+    volumes:
+      - ./config:/app/config
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Streamlit UI
+  streamlit-ui:
+    build: ./ui/streamlit
+    container_name: credit-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - AGENT_API_URL=http://credit-agent:8000
+    depends_on:
+      - credit-agent
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: credit-postgres
+    environment:
+      - POSTGRES_DB=credit_db
+      - POSTGRES_USER=credit_user
+      - POSTGRES_PASSWORD=credit_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: credit-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+networks:
+  agent-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

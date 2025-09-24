@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+langgraph==0.2.3
+langchain-mcp-adapters==0.1.0
+langchain-core==0.3.0
+langchain-openai==0.2.0
+langchain-anthropic==0.2.0
+pydantic==2.5.0
+httpx==0.25.2
+python-multipart==0.0.6
+asyncio-redis==0.16.0

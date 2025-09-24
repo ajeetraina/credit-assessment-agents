@@ -1,0 +1,9 @@
+# Docker Model Runner override for local models
+services:
+  # Override agent to use Docker Model Runner for local inference
+  credit-agent:
+    environment:
+      - MCP_GATEWAY_URL=http://mcp-gateway:3001
+      - USE_LOCAL_MODELS=true
+      - MODEL_RUNNER_URL=http://host.docker.internal:11434
+      - AGENT_MODE=local
